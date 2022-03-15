@@ -125,6 +125,7 @@ class SchemaApp(FlaskView):
 
     @route("/test_auth")
     def test_auth(self):
+        """See if username/password work, note all endpounits require username/password auth"""
         if authorize(request.authorization):
             return make_response("Authorized", Responses.ok)
         else:
@@ -132,6 +133,12 @@ class SchemaApp(FlaskView):
 
     @route("/upload_csv", methods=["GET", "POST"])
     def upload_csv(self):
+        """
+        Begin the csv upload process, should upload a file called `file`
+
+        The response will look something like
+        {"suggestions": {"first_name": ["firstName"]}}
+        """
         if request.method == "GET":
             return 400
         if not authorize(request.authorization):
@@ -149,6 +156,7 @@ class SchemaApp(FlaskView):
 
     @route("/cancel_upload", methods=["GET", "POST"])
     def cancel_upload(self):
+        """Cancel upload process"""
         if not authorize(request.authorization):
             return make_response("Invalid Authorization", Responses.unauthorized)
         if request.method == "GET":
@@ -158,24 +166,28 @@ class SchemaApp(FlaskView):
 
     @route("/get_schema", methods=["GET"])
     def get_schema(self):
+        """Get the schema, response will be a json with the schema"""
         if not authorize(request.authorization):
             return make_response("Invalid Authorization", Responses.unauthorized)
         return make_response(self.state.schema, Responses.ok)
 
     @route("/get_data", methods=["GET"])
     def get_data(self):
+        """Get the data, response will be the data in csv format as the response body"""
         if not authorize(request.authorization):
             return make_response("Invalid Authorization", Responses.unauthorized)
         return make_response(self.state.data.to_csv(index=False), Responses.ok)
 
     @route("/get_pending", methods=["GET"])
     def get_pending(self):
+        """Get the pending data, for debug purposes"""
         if not authorize(request.authorization):
             return make_response("Invalid Authorization", Responses.unauthorized)
         return make_response(self.state.pending_df.to_csv(index=False), Responses.ok)
 
     @route("/reset", methods=["GET", "POST"])
     def reset(self):
+        """Reset data and schema to defaults"""
         global state
         if request.method == "GET":
             return 400
@@ -186,6 +198,16 @@ class SchemaApp(FlaskView):
 
     @route("/complete_upload", methods=["GET", "POST"])
     def complete_upload(self):
+        """
+        Complete csv upload, to be called after `upload_csv`
+
+        The request json should be formatted as below, with one key per column specified in the `upload_csv` response
+        {
+            "newcol1": {"action": "drop"},
+            "newcol2": {"action": "add", "new_name": "favoriteColor", "dtype": "string"},
+            "newcol3": {"action": "map", "map_to_name": "signupDate"}
+        }
+        """
         if not authorize(request.authorization):
             return make_response("Invalid Authorization", Responses.unauthorized)
         if request.method == "GET":
@@ -197,12 +219,6 @@ class SchemaApp(FlaskView):
             return make_response(
                 "Need json actions map, see documentation", Responses.invalid
             )
-        # should look like
-        # {
-        #     "newcol1": {"action": "drop"},
-        #     "newcol2": {"action": "add", "new_name": "favoriteColor", "dtype": "string"},
-        #     "newcol3": {"action": "map", "map_to_name": "signupDate"}
-        # }
         new_columns = [
             x for x in self.state.pending_df.columns if x not in self.state.schema
         ]
@@ -265,6 +281,7 @@ class SchemaApp(FlaskView):
 
     @property
     def state(self):
+        """helper function to get the state from the global state variable, workaround for flask_classful limitation"""
         global state
         return state
 
