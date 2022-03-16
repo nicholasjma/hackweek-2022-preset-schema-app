@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import pickle
 from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date
@@ -151,6 +152,7 @@ class SchemaApp(FlaskView):
         if not authorize(request.authorization):
             return Responses.unauthorized("Invalid Authorization")
         if request.method == "POST":
+            self.load_state()
             self.state.pending_df = pd.read_csv(request.files["file"])
             response = {"suggestions": {}}
             for column in self.state.pending_df.columns:
@@ -159,6 +161,7 @@ class SchemaApp(FlaskView):
                     and column not in self.state.alternative_lookup_map
                 ):
                     response["suggestions"][column] = state.get_matches(column)
+            self.save_state()
             return Responses.ok(response)
 
     @route("/cancel_upload", methods=["GET", "POST"])
@@ -168,7 +171,9 @@ class SchemaApp(FlaskView):
             return Responses.unauthorized("Invalid Authorization")
         if request.method == "GET":
             return Responses.invalid("GET not supported for cancel_upload")
+        self.load_state()
         self.state.pending_df = None
+        self.save_state()
         return Responses.ok("Upload cancelled")
 
     @route("/get_schema", methods=["GET"])
@@ -176,6 +181,7 @@ class SchemaApp(FlaskView):
         """Get the schema, response will be a json with the schema"""
         if not authorize(request.authorization):
             return Responses.unauthorized("Invalid Authorization")
+        self.load_state()
         return Responses.ok(
             {
                 "schema": self.state.schema,
@@ -188,6 +194,7 @@ class SchemaApp(FlaskView):
         """Get the data, response will be the data in csv format as the response body"""
         if not authorize(request.authorization):
             return Responses.unauthorized("Invalid Authorization")
+        self.load_state()
         return Responses.ok(self.state.data.to_csv(index=False))
 
     @route("/get_pending", methods=["GET"])
@@ -195,6 +202,7 @@ class SchemaApp(FlaskView):
         """Get the pending data, for debug purposes"""
         if not authorize(request.authorization):
             return Responses.unauthorized("Invalid Authorization")
+        self.load_state()
         return Responses.ok(self.state.pending_df.to_csv(index=False))
 
     @route("/reset", methods=["GET", "POST"])
@@ -207,6 +215,7 @@ class SchemaApp(FlaskView):
             return Responses.unauthorized("Invalid Authorization")
         del state
         state = State()
+        self.save_state()
         return Responses.ok("Reset complete")
 
     @route("/complete_upload", methods=["GET", "POST"])
@@ -226,6 +235,7 @@ class SchemaApp(FlaskView):
             return Responses.unauthorized("Invalid Authorization")
         if request.method == "GET":
             return 400
+        self.load_state()
         new_state = deepcopy(state)
         if new_state.pending_df is None:
             return Responses.invalid("Use upload_csv first")
@@ -280,11 +290,11 @@ class SchemaApp(FlaskView):
         new_state.data = pd.concat([new_state.data, cleaned_new_data]).reset_index(
             drop=True
         )
-        print(cleaned_new_data, rename_map)
         for col, dtype in new_state.schema.items():
             new_state.data[col] = Dtypes[dtype].converter(new_state.data[col])
         assert set(new_state.data.columns) == set(new_state.schema.keys())
         state = new_state
+        self.save_state()
         return Responses.ok("Upload complete")
 
     @route("/update_schema", methods=["GET", "POST"])
@@ -315,6 +325,7 @@ class SchemaApp(FlaskView):
             return Responses.unauthorized("Invalid Authorization")
         if request.method == "GET":
             return 400
+        self.load_state()
         new_state = deepcopy(self.state)
         for column, action_dict in request.get_json().items():
             action = Actions[action_dict.get("action")]
@@ -374,7 +385,8 @@ class SchemaApp(FlaskView):
                             )
                     if alternatives:
                         if set(alternatives) & (
-                                set(new_state.schema) | set(new_state.alternative_lookup_map)
+                            set(new_state.schema)
+                            | set(new_state.alternative_lookup_map)
                         ):
                             return Responses.invalid(
                                 f"Alternatives {alternatives} must not already exist as columns or mappings"
@@ -388,7 +400,7 @@ class SchemaApp(FlaskView):
                 return Responses.invalid(f"Invalid action {action} for column {column}")
             new_state.update_alternatives_lookup()
         state = new_state
-        print(state.schema)
+        self.save_state()
         return Responses.ok("Schema update complete")
 
     @property
@@ -396,6 +408,16 @@ class SchemaApp(FlaskView):
         """helper function to get the state from the global state variable, workaround for flask_classful limitation"""
         global state
         return state
+
+    def load_state(self):
+        global state
+        with open("state.pkl", "rb") as f:
+            state = pickle.load(f)
+
+    def save_state(self):
+        global state
+        with open("state.pkl", "wb") as f:
+            pickle.dump(state, f)
 
 
 valid_users: Dict[str, str] = {
