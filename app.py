@@ -376,7 +376,6 @@ class SchemaApp(FlaskView):
                         )
                     new_state.schema[column] = Dtypes[dtype].name
                     new_state.data[column] = pd.NA
-                    print(new_state.data)
                     new_state.schema_alternatives[column] = alternatives or []
             elif action is Actions.alter:
                 if column in new_state.schema:
