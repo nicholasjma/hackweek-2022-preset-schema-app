@@ -12,6 +12,8 @@ import pandas as pd
 from flask import Flask, Response, make_response, request
 from flask_classful import FlaskView, route
 
+from word_ranker import similarity_ranking
+
 
 @dataclass
 class ResponseCode:
@@ -118,9 +120,19 @@ class State:
             for alternate in alternates:
                 self.alternative_lookup_map[alternate] = column
 
-    def get_matches(self, name) -> List[str]:
+    def get_matches(self, name) -> Dict[str, int]:
         """Return ordered list of matches here"""
-        return []
+        if name in self.schema or name in self.alternative_lookup_map:
+            return {name: 100}
+        ranking = similarity_ranking(name, self.get_corpus())
+        return {
+            column: similarity
+            for column, similarity in ranking.items()
+            if similarity >= 75
+        }
+
+    def get_corpus(self):
+        return set(self.schema.keys()) | set(self.alternative_lookup_map.keys())
 
 
 class SchemaApp(FlaskView):
@@ -197,6 +209,14 @@ class SchemaApp(FlaskView):
         self.load_state()
         return Responses.ok(self.state.data.to_csv(index=False))
 
+    @route("/get_data_json", methods=["GET", "POST"])
+    def get_data_json(self) -> Response:
+        """Get the data as json"""
+        if not authorize(request.authorization):
+            return Responses.unauthorized("Invalid Authorization")
+        self.load_state()
+        return Responses.ok(self.state.data.to_json(index=False))
+
     @route("/get_pending", methods=["GET"])
     def get_pending(self) -> Response:
         """Get the pending data, for debug purposes"""
@@ -249,8 +269,10 @@ class SchemaApp(FlaskView):
         drop_cols = []
         for column in new_columns:
             action_config = actions_configs.get(column)
-            if action_config is None:
-                return Responses.invalid(f"Action not specified for column {column}")
+            if column in self.state.alternative_lookup_map:
+                rename_map[column] = self.state.alternative_lookup_map[column]
+            elif action_config is None:
+                Responses.invalid(f"Action not specified for column {column}")
             else:
                 action = Actions[action_config["action"]]
             if action is Actions.drop:

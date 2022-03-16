@@ -1,5 +1,4 @@
 import io
-import time
 from unittest import TestCase
 
 import pandas as pd
@@ -85,12 +84,15 @@ class PresetSchemaTest(TestCase):
         self.assertEqual(r.status_code, 200)
         response = r.json()
         self.assertEqual(
-            set(response["suggestions"].keys()),
-            {"favorite_color", "signup_date", "bogus_data"},
+            response,
+            {
+                "suggestions": {
+                    "bogus_data": {},
+                    "favorite_color": {},
+                    "signup_date": {"signupDate": 100},
+                }
+            },
         )
-        r = requests.get(self.endpoint("get_pending"), auth=self.auth)
-        print(r.text)
-        self.assertEqual(r.status_code, 200)
         r = requests.post(
             self.endpoint("complete_upload"),
             json={
@@ -104,7 +106,6 @@ class PresetSchemaTest(TestCase):
             },
             auth=self.auth,
         )
-        print(r.text)
         self.assertEqual(r.status_code, 200)
         r = requests.get(self.endpoint("get_data"), auth=self.auth)
         self.assertEqual(r.status_code, 200)
