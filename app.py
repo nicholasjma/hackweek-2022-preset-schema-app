@@ -215,7 +215,7 @@ class SchemaApp(FlaskView):
         if not authorize(request.authorization):
             return Responses.unauthorized("Invalid Authorization")
         self.load_state()
-        return Responses.ok(self.state.data.to_json(index=False))
+        return Responses.ok(self.state.data.to_json(index=False, orient="split"))
 
     @route("/get_pending", methods=["GET"])
     def get_pending(self) -> Response:

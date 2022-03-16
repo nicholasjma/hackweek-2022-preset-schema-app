@@ -52,6 +52,30 @@ class PresetSchemaTest(TestCase):
             list(df.columns), ["email", "firstName", "lastName", "signupDate"]
         )
 
+    def test_get_data_json(self):
+        r = requests.post(self.endpoint("reset"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
+        r = requests.get(self.endpoint("get_data_json"), auth=self.auth)
+        self.assertEqual(
+            # fmt: off
+            r,
+            {
+                "columns": ["email", "firstName", "lastName", "signupDate"],
+                "data": [  #
+                    ["nick.ma@iterable.com", "Nick", "Ma", 1643673600000],
+                    ["brett.eckrich@iterable.com", "Brett", "Eckrich", 1643760000000],
+                    ["chris@iterable.com", "Chris", "Wheeler", 1643846400000],
+                    ["keegan@iterable.com", "Keegan", "Hinson", 1643932800000],
+                    ["kyle.moulder@iterable.com", "Kyle", "Moulder", 1644019200000],
+                    ["michelle.chuang@iterable.com", "Michelle", "Chuang", 1644105600000],
+                    ["mona.bazzaz@iterable.com", "Mona", "Bazzaz", 1644192000000],
+                    ["steven.milov@iterable.com", "Steven", "Milov", 1644278400000],
+                    ["tracy.schaffer@iterable.com", "Tracy", "Schaffer", 1644364800000],
+                ],
+            },
+            # fmt: on
+        )
+
     def test_reset(self):
         r = requests.post(self.endpoint("reset"), auth=self.auth)
         self.assertEqual(r.status_code, 200)
