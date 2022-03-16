@@ -1,4 +1,5 @@
 import io
+import time
 from unittest import TestCase
 
 import pandas as pd
@@ -7,16 +8,23 @@ import requests
 
 class PresetSchemaTest(TestCase):
     @classmethod
+    def endpoint(cls, endpoint: str):
+        return f"{cls.url}{endpoint}"
+
+    @classmethod
     def setUpClass(cls):
         cls.auth = ("iterable", "cinnamondreams29")
-        r = requests.post("http://127.0.0.1:5000/reset", auth=cls.auth)
+        # cls.url = "http://127.0.0.1:5000/"
+        cls.url = "https://hackweek-2022-schema-preset.herokuapp.com/"
+        # r = requests.post(cls.endpoint("reset"), auth=cls.auth)
 
     def test_auth(self):
-        r = requests.get("http://127.0.0.1:5000/test_auth", auth=self.auth)
+        r = requests.get(self.endpoint("test_auth"), auth=self.auth)
         self.assertEqual(r.status_code, 200)
 
     def test_get_schema(self):
-        r = requests.get("http://127.0.0.1:5000/get_schema", auth=self.auth)
+        r = requests.post(self.endpoint("reset"), auth=self.auth)
+        r = requests.get(self.endpoint("get_schema"), auth=self.auth)
         self.assertEqual(r.status_code, 200)
         self.assertEqual(
             r.json(),
@@ -37,18 +45,28 @@ class PresetSchemaTest(TestCase):
         )
 
     def test_get_data(self):
-        r = requests.get("http://127.0.0.1:5000/get_data", auth=self.auth)
+        r = requests.post(self.endpoint("reset"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
+        r = requests.get(self.endpoint("get_data"), auth=self.auth)
         df = pd.read_csv(io.StringIO(r.text))
         self.assertEqual(
             list(df.columns), ["email", "firstName", "lastName", "signupDate"]
         )
 
     def test_reset(self):
-        r = requests.post("http://127.0.0.1:5000/reset", auth=self.auth)
+        r = requests.post(self.endpoint("reset"), auth=self.auth)
         self.assertEqual(r.status_code, 200)
 
     def test_upload_process(self):
-        r = requests.post("http://127.0.0.1:5000/reset", auth=self.auth)
+        r = requests.post(self.endpoint("reset"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
+        r = requests.get(self.endpoint("get_data"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
+        df = pd.read_csv(io.StringIO(r.text))
+        self.assertEqual(
+            list(df.columns),
+            ["email", "firstName", "lastName", "signupDate"],
+        )
         df = pd.DataFrame(
             {
                 "email": ["bob@acme.com"],
@@ -60,17 +78,20 @@ class PresetSchemaTest(TestCase):
             }
         )
         r = requests.post(
-            "http://127.0.0.1:5000/upload_csv",
+            self.endpoint("upload_csv"),
             files={"file": io.StringIO(df.to_csv(index=False))},
             auth=self.auth,
         )
+        self.assertEqual(r.status_code, 200)
         response = r.json()
         self.assertEqual(
             set(response["suggestions"].keys()),
             {"favorite_color", "signup_date", "bogus_data"},
         )
+        r = requests.get(self.endpoint("get_pending"))
+        print(r.text)
         r = requests.post(
-            "http://127.0.0.1:5000/complete_upload",
+            self.endpoint("complete_upload"),
             json={
                 "favorite_color": {
                     "action": "add",
@@ -83,7 +104,9 @@ class PresetSchemaTest(TestCase):
             auth=self.auth,
         )
         print(r.text)
-        r = requests.get("http://127.0.0.1:5000/get_data", auth=self.auth)
+        self.assertEqual(r.status_code, 200)
+        r = requests.get(self.endpoint("get_data"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
         df = pd.read_csv(io.StringIO(r.text))
         self.assertEqual(
             list(df.columns),
@@ -93,7 +116,8 @@ class PresetSchemaTest(TestCase):
             df.iloc[-1].tolist(),
             ["bob@acme.com", "Bob", "Jones", "2020-12-05", "purple"],
         )
-        r = requests.get("http://127.0.0.1:5000/get_schema", auth=self.auth)
+        r = requests.get(self.endpoint("get_schema"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
         self.assertEqual(
             r.json()["schema"],
             {
@@ -106,9 +130,10 @@ class PresetSchemaTest(TestCase):
         )
 
     def test_update_schema(self):
-        r = requests.post("http://127.0.0.1:5000/reset", auth=self.auth)
+        r = requests.post(self.endpoint("reset"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
         r = requests.post(
-            "http://127.0.0.1:5000/update_schema",
+            self.endpoint("update_schema"),
             json={
                 "email": {"action": "drop"},
                 "widgetsOwned": {"action": "add", "dtype": "int"},
@@ -120,7 +145,8 @@ class PresetSchemaTest(TestCase):
             },
             auth=self.auth,
         )
-        r = requests.get("http://127.0.0.1:5000/get_schema", auth=self.auth)
+        r = requests.get(self.endpoint("get_schema"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
         print(r.json())
         self.assertEqual(
             r.json(),
@@ -139,7 +165,8 @@ class PresetSchemaTest(TestCase):
                 },
             },
         )
-        r = requests.get("http://127.0.0.1:5000/get_data", auth=self.auth)
+        r = requests.get(self.endpoint("get_data"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
         df = pd.read_csv(io.StringIO(r.text))
         self.assertEqual(
             list(df.columns), ["firstName", "lastName", "signup_date", "widgetsOwned"]

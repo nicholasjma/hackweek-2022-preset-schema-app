@@ -183,7 +183,7 @@ class SchemaApp(FlaskView):
             },
         )
 
-    @route("/get_data", methods=["GET"])
+    @route("/get_data", methods=["GET", "POST"])
     def get_data(self) -> Response:
         """Get the data, response will be the data in csv format as the response body"""
         if not authorize(request.authorization):
@@ -205,6 +205,7 @@ class SchemaApp(FlaskView):
             return 400
         if not authorize(request.authorization):
             return Responses.unauthorized("Invalid Authorization")
+        del state
         state = State()
         return Responses.ok("Reset complete")
 
