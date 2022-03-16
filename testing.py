@@ -162,7 +162,11 @@ class PresetSchemaTest(TestCase):
             self.endpoint("update_schema"),
             json={
                 "email": {"action": "drop"},
-                "widgetsOwned": {"action": "add", "dtype": "int"},
+                "widgetsOwned": {
+                    "action": "add",
+                    "dtype": "int",
+                    "alternatives": ["widgets_owned", "Widgets Owned"],
+                },
                 "signupDate": {
                     "action": "alter",
                     "new_name": "signup_date",
@@ -186,7 +190,7 @@ class PresetSchemaTest(TestCase):
                     "firstName": [],
                     "lastName": [],
                     "signupDate": [],
-                    "widgetsOwned": [],
+                    "widgetsOwned": ["widgets_owned", "Widgets Owned"],
                 },
             },
         )
