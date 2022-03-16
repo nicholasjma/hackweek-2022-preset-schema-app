@@ -1,19 +1,33 @@
+from __future__ import annotations
+
 import hashlib
+from dataclasses import dataclass
 from datetime import date
 from enum import Enum, IntEnum
-from typing import Dict, List
+from typing import Any, Dict, List
 
 import pandas as pd
-from flask import Flask, make_response, request
+from flask import Flask, Response, make_response, request
 from flask_classful import FlaskView, route
 
 
-class Responses:
-    notfound = 404
-    invalid = 400
-    unauthorized = 403
-    ok = 200
-    unimplemented = 501
+@dataclass
+class ResponseCode:
+    code: int
+
+    def __call__(self, body: Any) -> Response:
+        return make_response(body, self.code)
+
+
+class Responses(Enum):
+    notfound = ResponseCode(404)
+    invalid = ResponseCode(400)
+    unauthorized = ResponseCode(403)
+    ok = ResponseCode(200)
+    unimplemented = ResponseCode(501)
+
+    def __call__(self, body: Any) -> Response:
+        return self.value(body)
 
 
 class Dtypes(Enum):
@@ -39,7 +53,7 @@ class Actions(IntEnum):
     alter = 4
 
 
-def authorize(authorization: Dict[str, str]):
+def authorize(authorization: Dict[str, str]) -> bool:
     try:
         if authorization["username"] in valid_users:
             pass_hash = hashlib.sha256(authorization["password"].encode()).hexdigest()
@@ -59,6 +73,7 @@ class State:
             "signupDate": Dtypes.timestamp.name,
         }
         self.schema_alternatives = {k: [] for k in self.schema.keys()}
+        self.alternative_lookup_map = None
         self.update_alternatives_lookup()
 
         data = pd.DataFrame(
@@ -115,15 +130,15 @@ class SchemaApp(FlaskView):
         return "See API documentation"
 
     @route("/test_auth")
-    def test_auth(self):
+    def test_auth(self) -> Response:
         """See if username/password work, note all endpounits require username/password auth"""
         if authorize(request.authorization):
-            return make_response("Authorized", Responses.ok)
+            return Responses.ok("Authorized")
         else:
-            return make_response("Invalid Authorization", Responses.unauthorized)
+            return Responses.unauthorized("Invalid Authorization")
 
     @route("/upload_csv", methods=["GET", "POST"])
-    def upload_csv(self):
+    def upload_csv(self) -> Response:
         """
         Begin the csv upload process, should upload a file called `file`
 
@@ -133,7 +148,7 @@ class SchemaApp(FlaskView):
         if request.method == "GET":
             return 400
         if not authorize(request.authorization):
-            return make_response("Invalid Authorization", Responses.unauthorized)
+            return Responses.unauthorized("Invalid Authorization")
         if request.method == "POST":
             self.state.pending_df = pd.read_csv(request.files["file"])
             response = {"suggestions": {}}
@@ -143,58 +158,57 @@ class SchemaApp(FlaskView):
                     and column not in self.state.alternative_lookup_map
                 ):
                     response["suggestions"][column] = state.get_matches(column)
-            return make_response(response, Responses.ok)
+            return Responses.ok(response)
 
     @route("/cancel_upload", methods=["GET", "POST"])
-    def cancel_upload(self):
+    def cancel_upload(self) -> Response:
         """Cancel upload process"""
         if not authorize(request.authorization):
-            return make_response("Invalid Authorization", Responses.unauthorized)
+            return Responses.unauthorized("Invalid Authorization")
         if request.method == "GET":
-            return 400
+            return Responses.invalid("GET not supported for cancel_upload")
         self.state.pending_df = None
-        return make_response("Upload cancelled", Responses.ok)
+        return Responses.ok("Upload cancelled")
 
     @route("/get_schema", methods=["GET"])
-    def get_schema(self):
+    def get_schema(self) -> Response:
         """Get the schema, response will be a json with the schema"""
         if not authorize(request.authorization):
-            return make_response("Invalid Authorization", Responses.unauthorized)
-        return make_response(
+            return Responses.unauthorized("Invalid Authorization")
+        return Responses.ok(
             {
                 "schema": self.state.schema,
                 "schema_alternatives": self.state.schema_alternatives,
             },
-            Responses.ok,
         )
 
     @route("/get_data", methods=["GET"])
-    def get_data(self):
+    def get_data(self) -> Response:
         """Get the data, response will be the data in csv format as the response body"""
         if not authorize(request.authorization):
-            return make_response("Invalid Authorization", Responses.unauthorized)
-        return make_response(self.state.data.to_csv(index=False), Responses.ok)
+            return Responses.unauthorized("Invalid Authorization")
+        return Responses.ok(self.state.data.to_csv(index=False))
 
     @route("/get_pending", methods=["GET"])
-    def get_pending(self):
+    def get_pending(self) -> Response:
         """Get the pending data, for debug purposes"""
         if not authorize(request.authorization):
-            return make_response("Invalid Authorization", Responses.unauthorized)
-        return make_response(self.state.pending_df.to_csv(index=False), Responses.ok)
+            return Responses.unauthorized("Invalid Authorization")
+        return Responses.ok(self.state.pending_df.to_csv(index=False))
 
     @route("/reset", methods=["GET", "POST"])
-    def reset(self):
+    def reset(self) -> Response:
         """Reset data and schema to defaults"""
         global state
         if request.method == "GET":
             return 400
         if not authorize(request.authorization):
-            return make_response("Invalid Authorization", Responses.unauthorized)
+            return Responses.unauthorized("Invalid Authorization")
         state = State()
-        return make_response("Reset complete", Responses.ok)
+        return Responses.ok("Reset complete")
 
     @route("/complete_upload", methods=["GET", "POST"])
-    def complete_upload(self):
+    def complete_upload(self) -> Response:
         """
         Complete csv upload, to be called after `upload_csv`
 
@@ -206,16 +220,14 @@ class SchemaApp(FlaskView):
         }
         """
         if not authorize(request.authorization):
-            return make_response("Invalid Authorization", Responses.unauthorized)
+            return Responses.unauthorized("Invalid Authorization")
         if request.method == "GET":
             return 400
         if self.state.pending_df is None:
-            return make_response("Use upload_csv first", Responses.invalid)
+            return Responses.invalid("Use upload_csv first")
         actions_configs = request.get_json()
         if not isinstance(actions_configs, dict):
-            return make_response(
-                "Need json actions map, see documentation", Responses.invalid
-            )
+            return Responses.invalid("Need json actions map, see documentation")
         new_columns = [
             x for x in self.state.pending_df.columns if x not in self.state.schema
         ]
@@ -224,7 +236,7 @@ class SchemaApp(FlaskView):
         for column in new_columns:
             action_config = actions_configs.get(column)
             if action_config is None:
-                return f"Action not specified for column {column}"
+                return Responses.invalid(f"Action not specified for column {column}")
             else:
                 action = Actions[action_config["action"]]
             if action is Actions.drop:
@@ -233,35 +245,24 @@ class SchemaApp(FlaskView):
                 dtype = action_config.get("dtype")
                 new_name = action_config.get("new_name")
                 if dtype is None:
-                    return make_response(
-                        "Missing dtype field for action add", Responses.invalid
-                    )
+                    return Responses.invalid("Missing dtype field for action add")
                 if new_name is None:
-                    return make_response(
-                        "Missing new_name field for action add", Responses.invalid
-                    )
+                    return Responses.invalid("Missing new_name field for action add")
                 if new_name in self.state.schema:
-                    return (
-                        f"New column name {new_name} already in schema",
-                        Responses.invalid,
+                    return Responses.invalid(
+                        f"New column name {new_name} already in schema"
                     )
                 if dtype not in Dtypes.__members__:
-                    return (
-                        f"Invalid dtype {dtype}",
-                        Responses.invalid,
-                    )
+                    return Responses.invalid(f"Invalid dtype {dtype}")
                 self.state.schema[new_name] = Dtypes[dtype].name
                 self.state.data[new_name] = pd.NA
             elif action is Actions.map:
                 map_to_name = actions_configs[column].get("map_to_name")
                 if map_to_name is None:
-                    return make_response(
-                        "Missing map_to_name field for action map", Responses.invalid
-                    )
+                    return Responses.invalid("Missing map_to_name field for action map")
                 elif map_to_name not in self.state.schema:
-                    return (
-                        f"map_to_name {map_to_name} not in current schema",
-                        Responses.invalid,
+                    return Responses.invalid(
+                        f"map_to_name {map_to_name} not in current schema"
                     )
                 else:
                     rename_map[column] = map_to_name
@@ -275,10 +276,10 @@ class SchemaApp(FlaskView):
         for col, dtype in self.state.schema.items():
             self.state.data[col] = Dtypes[dtype].converter(self.state.data[col])
         assert set(self.state.data.columns) == set(self.state.schema.keys())
-        return make_response("", Responses.ok)
+        return Responses.ok("Upload complete")
 
     @route("/update_schema", methods=["GET", "POST"])
-    def update_schema(self):
+    def update_schema(self) -> Response:
         """
         Update the schema
 
@@ -300,16 +301,16 @@ class SchemaApp(FlaskView):
             }
         }
         """
-        return "Not implemented", Responses.unimplemented
+        return Responses.unimplemented("Not implemented")
 
     @property
-    def state(self):
+    def state(self) -> State:
         """helper function to get the state from the global state variable, workaround for flask_classful limitation"""
         global state
         return state
 
 
-valid_users = {
+valid_users: Dict[str, str] = {
     "iterable": "1116977ba16abc1fd84fec9cd1494bc18faa596307737d7f5e2e1ef5aa230874",
 }
 
