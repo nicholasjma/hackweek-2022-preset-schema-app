@@ -265,6 +265,7 @@ class SchemaApp(FlaskView):
                     )
                 else:
                     rename_map[column] = map_to_name
+        self.state.update_alternatives_lookup()
         cleaned_new_data = self.state.pending_df.drop(columns=drop_cols).rename(
             columns=rename_map
         )
@@ -314,6 +315,4 @@ valid_users = {
 
 app = Flask(__name__)
 state = State()
-
-
 SchemaApp.register(app, route_base="/")

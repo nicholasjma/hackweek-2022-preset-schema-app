@@ -9,10 +9,11 @@ class PresetSchemaTest(TestCase):
     @classmethod
     def setUpClass(cls):
         cls.auth = ("iterable", "cinnamondreams29")
+        r = requests.post("http://127.0.0.1:5000/reset", auth=cls.auth)
 
     def test_auth(self):
         r = requests.get("http://127.0.0.1:5000/test_auth", auth=self.auth)
-        self.assertEquals(r.status_code, 200)
+        self.assertEqual(r.status_code, 200)
 
     def test_get_schema(self):
         r = requests.get("http://127.0.0.1:5000/get_schema", auth=self.auth)
@@ -20,10 +21,18 @@ class PresetSchemaTest(TestCase):
         self.assertEqual(
             r.json(),
             {
-                "email": "string",
-                "firstName": "string",
-                "lastName": "string",
-                "signupDate": "timestamp",
+                "schema": {
+                    "email": "string",
+                    "firstName": "string",
+                    "lastName": "string",
+                    "signupDate": "timestamp",
+                },
+                "schema_alternatives": {
+                    "email": [],
+                    "firstName": [],
+                    "lastName": [],
+                    "signupDate": [],
+                },
             },
         )
 
@@ -86,7 +95,7 @@ class PresetSchemaTest(TestCase):
         )
         r = requests.get("http://127.0.0.1:5000/get_schema", auth=self.auth)
         self.assertEqual(
-            r.json(),
+            r.json()["schema"],
             {
                 "email": "string",
                 "favoriteColor": "string",
@@ -95,4 +104,3 @@ class PresetSchemaTest(TestCase):
                 "signupDate": "timestamp",
             },
         )
-
