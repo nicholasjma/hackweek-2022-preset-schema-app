@@ -104,3 +104,43 @@ class PresetSchemaTest(TestCase):
                 "signupDate": "timestamp",
             },
         )
+
+    def test_update_schema(self):
+        r = requests.post("http://127.0.0.1:5000/reset", auth=self.auth)
+        r = requests.post(
+            "http://127.0.0.1:5000/update_schema",
+            json={
+                "email": {"action": "drop"},
+                "widgetsOwned": {"action": "add", "dtype": "int"},
+                "signupDate": {
+                    "action": "alter",
+                    "new_name": "signup_date",
+                    "dtype": "string",
+                },
+            },
+            auth=self.auth,
+        )
+        r = requests.get("http://127.0.0.1:5000/get_schema", auth=self.auth)
+        print(r.json())
+        self.assertEqual(
+            r.json(),
+            {
+                "schema": {
+                    "firstName": "string",
+                    "lastName": "string",
+                    "signup_date": "string",
+                    "widgetsOwned": "int",
+                },
+                "schema_alternatives": {
+                    "firstName": [],
+                    "lastName": [],
+                    "signupDate": [],
+                    "widgetsOwned": [],
+                },
+            },
+        )
+        r = requests.get("http://127.0.0.1:5000/get_data", auth=self.auth)
+        df = pd.read_csv(io.StringIO(r.text))
+        self.assertEqual(
+            list(df.columns), ["firstName", "lastName", "signup_date", "widgetsOwned"]
+        )

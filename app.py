@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import date
 from enum import Enum, IntEnum
@@ -41,9 +42,9 @@ class Dtypes(Enum):
         if self is Dtypes.string:
             return lambda col: col.astype(str)
         elif self is Dtypes.long or self is Dtypes.int:
-            return lambda col: col.astype(int)
+            return lambda col: col.astype("Int64")
         elif self is Dtypes.timestamp:
-            return lambda col: pd.to_datetime(col)
+            return lambda col: pd.to_datetime(col, errors="coerce")
 
 
 class Actions(IntEnum):
@@ -301,7 +302,85 @@ class SchemaApp(FlaskView):
             }
         }
         """
-        return Responses.unimplemented("Not implemented")
+        global state
+        if not authorize(request.authorization):
+            return Responses.unauthorized("Invalid Authorization")
+        if request.method == "GET":
+            return 400
+        new_state = deepcopy(self.state)
+        for column, action_dict in request.get_json().items():
+            action = Actions[action_dict.get("action")]
+            if action is Actions.drop:
+                if column in new_state.schema:
+                    del new_state.schema[column]
+                    del new_state.schema_alternatives[column]
+                    del new_state.data[column]
+                else:
+                    return Responses.invalid(f"Invalid column {column}")
+            elif action is Actions.add:
+                if column in new_state.schema:
+                    return Responses.invalid(f"Column {column} already exists")
+                else:
+                    dtype = action_dict.get("dtype")
+                    alternatives = action_dict.get("alternatives")
+                    if alternatives and set(alternatives) & (
+                        set(new_state.schema) | set(new_state.alternative_lookup_map)
+                    ):
+                        return Responses.invalid(
+                            f"Alternatives {alternatives} must not already exist as columns or mappings"
+                        )
+                    if dtype is None:
+                        return Responses.invalid(
+                            f"Invalid dtype {dtype} for column {column}"
+                        )
+                    new_state.schema[column] = Dtypes[dtype].name
+                    new_state.data[column] = pd.NA
+                    print(new_state.data)
+                    new_state.schema_alternatives[column] = alternatives or []
+            elif action is Actions.alter:
+                if column in new_state.schema:
+                    dtype = action_dict.get("dtype")
+                    new_name = action_dict.get("new_name")
+                    alternatives = action_dict.get("alternatives")
+                    if new_name:
+                        if new_name in new_state.schema:
+                            return Responses.invalid(
+                                f"New name {new_name} for column {column} already exists"
+                            )
+                        new_state.schema[new_name] = new_state.schema[column]
+                        del new_state.schema[column]
+                        new_state.data = new_state.data.rename(
+                            columns={column: new_name}
+                        )
+                    else:
+                        new_name = column
+                    if dtype:
+                        if dtype in Dtypes.__members__:
+                            new_state.schema[new_name] = dtype
+                            new_state.data[new_name] = Dtypes[dtype].converter(
+                                new_state.data[new_name]
+                            )
+                        else:
+                            return Responses.invalid(
+                                f"Invalid dtype {dtype} for column {new_name}"
+                            )
+                    if alternatives:
+                        if set(alternatives) & (
+                                set(new_state.schema) | set(new_state.alternative_lookup_map)
+                        ):
+                            return Responses.invalid(
+                                f"Alternatives {alternatives} must not already exist as columns or mappings"
+                            )
+                        new_state.schema_alternatives[new_name] = alternatives
+                else:
+                    return Responses.invalid(
+                        f"Cannot alter non-existent column {column}"
+                    )
+            else:
+                return Responses.invalid(f"Invalid action {action} for column {column}")
+            new_state.update_alternatives_lookup()
+        state = new_state
+        return Responses.ok("Schema update complete")
 
     @property
     def state(self) -> State:
