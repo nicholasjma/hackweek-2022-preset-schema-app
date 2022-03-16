@@ -388,6 +388,7 @@ class SchemaApp(FlaskView):
                 return Responses.invalid(f"Invalid action {action} for column {column}")
             new_state.update_alternatives_lookup()
         state = new_state
+        print(state.schema)
         return Responses.ok("Schema update complete")
 
     @property

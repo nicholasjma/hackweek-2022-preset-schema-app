@@ -16,7 +16,6 @@ class PresetSchemaTest(TestCase):
         cls.auth = ("iterable", "cinnamondreams29")
         # cls.url = "http://127.0.0.1:5000/"
         cls.url = "https://hackweek-2022-schema-preset.herokuapp.com/"
-        # r = requests.post(cls.endpoint("reset"), auth=cls.auth)
 
     def test_auth(self):
         r = requests.get(self.endpoint("test_auth"), auth=self.auth)
@@ -24,6 +23,7 @@ class PresetSchemaTest(TestCase):
 
     def test_get_schema(self):
         r = requests.post(self.endpoint("reset"), auth=self.auth)
+        self.assertEqual(r.status_code, 200)
         r = requests.get(self.endpoint("get_schema"), auth=self.auth)
         self.assertEqual(r.status_code, 200)
         self.assertEqual(
@@ -88,8 +88,9 @@ class PresetSchemaTest(TestCase):
             set(response["suggestions"].keys()),
             {"favorite_color", "signup_date", "bogus_data"},
         )
-        r = requests.get(self.endpoint("get_pending"))
+        r = requests.get(self.endpoint("get_pending"), auth=self.auth)
         print(r.text)
+        self.assertEqual(r.status_code, 200)
         r = requests.post(
             self.endpoint("complete_upload"),
             json={
