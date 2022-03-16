@@ -55,7 +55,7 @@ class PresetSchemaTest(TestCase):
                 "firstName": ["Bob"],
                 "lastName": ["Jones"],
                 "signup_date": ["2020-12-05"],
-                "favoriteColor": ["purple"],
+                "favorite_color": ["purple"],
                 "bogus_data": [325822],
             }
         )
@@ -67,12 +67,12 @@ class PresetSchemaTest(TestCase):
         response = r.json()
         self.assertEqual(
             set(response["suggestions"].keys()),
-            {"favoriteColor", "signup_date", "bogus_data"},
+            {"favorite_color", "signup_date", "bogus_data"},
         )
         r = requests.post(
             "http://127.0.0.1:5000/complete_upload",
             json={
-                "favoriteColor": {
+                "favorite_color": {
                     "action": "add",
                     "new_name": "favoriteColor",
                     "dtype": "string",

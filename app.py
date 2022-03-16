@@ -220,17 +220,19 @@ class SchemaApp(FlaskView):
             "newcol3": {"action": "map", "map_to_name": "signupDate"}
         }
         """
+        global state
         if not authorize(request.authorization):
             return Responses.unauthorized("Invalid Authorization")
         if request.method == "GET":
             return 400
-        if self.state.pending_df is None:
+        new_state = deepcopy(state)
+        if new_state.pending_df is None:
             return Responses.invalid("Use upload_csv first")
         actions_configs = request.get_json()
         if not isinstance(actions_configs, dict):
             return Responses.invalid("Need json actions map, see documentation")
         new_columns = [
-            x for x in self.state.pending_df.columns if x not in self.state.schema
+            x for x in new_state.pending_df.columns if x not in new_state.schema
         ]
         rename_map = {}
         drop_cols = []
@@ -249,34 +251,39 @@ class SchemaApp(FlaskView):
                     return Responses.invalid("Missing dtype field for action add")
                 if new_name is None:
                     return Responses.invalid("Missing new_name field for action add")
-                if new_name in self.state.schema:
+                elif new_name in new_state.schema:
                     return Responses.invalid(
                         f"New column name {new_name} already in schema"
                     )
+                else:
+                    rename_map[column] = new_name
                 if dtype not in Dtypes.__members__:
                     return Responses.invalid(f"Invalid dtype {dtype}")
-                self.state.schema[new_name] = Dtypes[dtype].name
-                self.state.data[new_name] = pd.NA
+                new_state.schema[new_name] = Dtypes[dtype].name
+                new_state.schema_alternatives[new_name] = []
+                new_state.data[new_name] = pd.NA
             elif action is Actions.map:
                 map_to_name = actions_configs[column].get("map_to_name")
                 if map_to_name is None:
                     return Responses.invalid("Missing map_to_name field for action map")
-                elif map_to_name not in self.state.schema:
+                elif map_to_name not in new_state.schema:
                     return Responses.invalid(
                         f"map_to_name {map_to_name} not in current schema"
                     )
                 else:
                     rename_map[column] = map_to_name
-        self.state.update_alternatives_lookup()
-        cleaned_new_data = self.state.pending_df.drop(columns=drop_cols).rename(
+        new_state.update_alternatives_lookup()
+        cleaned_new_data = new_state.pending_df.drop(columns=drop_cols).rename(
             columns=rename_map
         )
-        self.state.data = pd.concat([self.state.data, cleaned_new_data]).reset_index(
+        new_state.data = pd.concat([new_state.data, cleaned_new_data]).reset_index(
             drop=True
         )
-        for col, dtype in self.state.schema.items():
-            self.state.data[col] = Dtypes[dtype].converter(self.state.data[col])
-        assert set(self.state.data.columns) == set(self.state.schema.keys())
+        print(cleaned_new_data, rename_map)
+        for col, dtype in new_state.schema.items():
+            new_state.data[col] = Dtypes[dtype].converter(new_state.data[col])
+        assert set(new_state.data.columns) == set(new_state.schema.keys())
+        state = new_state
         return Responses.ok("Upload complete")
 
     @route("/update_schema", methods=["GET", "POST"])
