@@ -7,14 +7,13 @@ import pandas as pd
 from flask import Flask, make_response, request
 from flask_classful import FlaskView, route
 
-app = Flask(__name__)
-
 
 class Responses:
     notfound = 404
     invalid = 400
     unauthorized = 403
     ok = 200
+    unimplemented = 501
 
 
 class Dtypes(Enum):
@@ -37,15 +36,7 @@ class Actions(IntEnum):
     drop = 1
     add = 2
     map = 3
-
-
-def get_matches(name: str) -> List[str]:
-    return []
-
-
-valid_users = {
-    "iterable": "1116977ba16abc1fd84fec9cd1494bc18faa596307737d7f5e2e1ef5aa230874",
-}
+    alter = 4
 
 
 def authorize(authorization: Dict[str, str]):
@@ -110,8 +101,9 @@ class State:
             for alternate in alternates:
                 self.alternative_lookup_map[alternate] = column
 
-
-state = State()
+    def get_matches(self, name) -> List[str]:
+        """Return ordered list of matches here"""
+        return []
 
 
 class SchemaApp(FlaskView):
@@ -150,7 +142,7 @@ class SchemaApp(FlaskView):
                     column not in self.state.schema
                     and column not in self.state.alternative_lookup_map
                 ):
-                    response["suggestions"][column] = get_matches(column)
+                    response["suggestions"][column] = state.get_matches(column)
             return make_response(response, Responses.ok)
 
     @route("/cancel_upload", methods=["GET", "POST"])
@@ -168,7 +160,13 @@ class SchemaApp(FlaskView):
         """Get the schema, response will be a json with the schema"""
         if not authorize(request.authorization):
             return make_response("Invalid Authorization", Responses.unauthorized)
-        return make_response(self.state.schema, Responses.ok)
+        return make_response(
+            {
+                "schema": self.state.schema,
+                "schema_alternatives": self.state.schema_alternatives,
+            },
+            Responses.ok,
+        )
 
     @route("/get_data", methods=["GET"])
     def get_data(self):
@@ -278,11 +276,44 @@ class SchemaApp(FlaskView):
         assert set(self.state.data.columns) == set(self.state.schema.keys())
         return make_response("", Responses.ok)
 
+    @route("/update_schema", methods=["GET", "POST"])
+    def update_schema(self):
+        """
+        Update the schema
+
+        JSON should look like this
+        {
+            "existing_col": {
+                "action": "alter",
+                "new_name": "some_other_col",
+                "dtype": "string",
+                "alternatives": ["col1", "col2"],
+            },
+            "new_col": {
+                "action": "add",
+                "dtype": "string",
+                "alternatives": ["new_col_alias_1", "new_col_alias_2"],
+            },
+            "existing_col_to_delete": {
+                "action": "drop",
+            }
+        }
+        """
+        return "Not implemented", Responses.unimplemented
+
     @property
     def state(self):
         """helper function to get the state from the global state variable, workaround for flask_classful limitation"""
         global state
         return state
+
+
+valid_users = {
+    "iterable": "1116977ba16abc1fd84fec9cd1494bc18faa596307737d7f5e2e1ef5aa230874",
+}
+
+app = Flask(__name__)
+state = State()
 
 
 SchemaApp.register(app, route_base="/")

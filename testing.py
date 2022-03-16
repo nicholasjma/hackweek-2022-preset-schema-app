@@ -95,3 +95,4 @@ class PresetSchemaTest(TestCase):
                 "signupDate": "timestamp",
             },
         )
+
