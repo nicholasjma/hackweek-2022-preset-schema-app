@@ -147,7 +147,6 @@ class PresetSchemaTest(TestCase):
         )
         r = requests.get(self.endpoint("get_schema"), auth=self.auth)
         self.assertEqual(r.status_code, 200)
-        print(r.json())
         self.assertEqual(
             r.json(),
             {
