@@ -146,6 +146,7 @@ class SchemaApp(FlaskView):
     @route("/test_auth")
     def test_auth(self) -> Response:
         """See if username/password work, note all endpounits require username/password auth"""
+        print(request.headers, request.data)
         if authorize(request.authorization):
             return Responses.ok("Authorized")
         else:
