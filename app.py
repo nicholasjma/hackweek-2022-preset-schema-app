@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import pickle
 from copy import deepcopy
 from dataclasses import dataclass
@@ -166,16 +167,35 @@ class SchemaApp(FlaskView):
             return Responses.unauthorized("Invalid Authorization")
         if request.method == "POST":
             self.load_state()
-            self.state.pending_df = pd.read_csv(request.files["file"])
-            response = {"suggestions": {}}
-            for column in self.state.pending_df.columns:
-                if (
-                    column not in self.state.schema
-                    and column not in self.state.alternative_lookup_map
-                ):
-                    response["suggestions"][column] = state.get_matches(column)
-            self.save_state()
-            return Responses.ok(response)
+            return self.handle_csv(pd.read_csv(request.files["file"]))
+
+    @route("/upload_csv_text", methods=["GET", "POST"])
+    def upload_csv_text(self) -> Response:
+        """
+        Begin the csv upload process, should upload a file called `file`
+
+        The response will look something like
+        {"suggestions": {"first_name": ["firstName"]}}
+        """
+        if request.method == "GET":
+            return 400
+        if not authorize(request.authorization):
+            return Responses.unauthorized("Invalid Authorization")
+        if request.method == "POST":
+            self.load_state()
+            return self.handle_csv(pd.read_csv(io.StringIO(request.get_data().decode())))
+
+    def handle_csv(self, df: pd.DataFrame) -> Response:
+        self.state.pending_df = df
+        response = {"suggestions": {}}
+        for column in self.state.pending_df.columns:
+            if (
+                column not in self.state.schema
+                and column not in self.state.alternative_lookup_map
+            ):
+                response["suggestions"][column] = state.get_matches(column)
+        self.save_state()
+        return Responses.ok(response)
 
     @route("/cancel_upload", methods=["GET", "POST"])
     def cancel_upload(self) -> Response:
