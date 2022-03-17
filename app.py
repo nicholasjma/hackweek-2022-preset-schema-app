@@ -449,3 +449,4 @@ valid_users: Dict[str, str] = {
 app = Flask(__name__)
 state = State()
 SchemaApp.register(app, route_base="/")
+SchemaApp.save_state(None)

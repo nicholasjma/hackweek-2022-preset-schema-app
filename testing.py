@@ -18,7 +18,6 @@ class PresetSchemaTest(TestCase):
 
     def test_auth(self):
         r = requests.get(self.endpoint("test_auth"), auth=self.auth)
-        print("Body", r.body, "Headers", r.headers)
         self.assertEqual(r.status_code, 200)
 
 
