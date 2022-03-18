@@ -13,8 +13,17 @@ class PresetSchemaTest(TestCase):
     @classmethod
     def setUpClass(cls):
         cls.auth = ("iterable", "cinnamondreams29")
-        cls.url = "http://127.0.0.1:5000/"
-        # cls.url = "https://hackweek-2022-schema-preset.herokuapp.com/"
+        # cls.url = "http://127.0.0.1:5000/"
+        cls.url = "https://hackweek-2022-schema-preset.herokuapp.com/"
+
+    def test_print_schema(self):
+        r = requests.get(self.endpoint("get_schema"), auth=self.auth)
+        print(r.json())
+        self.assertEqual(r.status_code, 200)
+
+    @classmethod
+    def tearDownClass(cls):
+        r = requests.post(cls.endpoint("reset"), auth=cls.auth)
 
     def test_auth(self):
         r = requests.get(self.endpoint("test_auth"), auth=self.auth)
@@ -204,26 +213,11 @@ class PresetSchemaTest(TestCase):
     def test_upload_text(self):
         r = requests.post(self.endpoint("reset"), auth=self.auth)
         self.assertEqual(r.status_code, 200)
-        r = requests.get(self.endpoint("get_data"), auth=self.auth)
-        self.assertEqual(r.status_code, 200)
-        df = pd.read_csv(io.StringIO(r.text))
-        self.assertEqual(
-            list(df.columns),
-            ["email", "firstName", "lastName", "signupDate"],
-        )
-        df = pd.DataFrame(
-            {
-                "email": ["bob@acme.com"],
-                "firstName": ["Bob"],
-                "lastName": ["Jones"],
-                "signup_date": ["2020-12-05"],
-                "favorite_color": ["purple"],
-                "bogus_data": [325822],
-            }
-        )
+        csv = """email,firstName,lastName,signup_date,favorite_color,bogus_data
+bob@acme.com,Bob,Jones,2020-12-05,purple,325822"""
         r = requests.post(
             self.endpoint("upload_csv_text"),
-            data=df.to_csv(index=False),
+            data=csv,
             auth=self.auth,
         )
         self.assertEqual(r.status_code, 200)

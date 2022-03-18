@@ -1,29 +1,22 @@
-import json
 import re
-from collections import defaultdict
 from difflib import SequenceMatcher
-from typing import Dict, List
-
-import requests
-
-base_url = "https://api.iterable.com/"
-get_profile_fields_url = "api/users/getFields"
+from typing import Dict, List, Set
 
 with open("topwords.txt") as word_file:
-    cleaned_words = {word.strip().lower() for word in word_file}
+    cleaned_words: Set[str] = {word.strip().lower() for word in word_file}
 
 
-def extract_words(s: str):
-    res = [x for x in cleaned_word_dict if x in s]
+def extract_words(s: str) -> List[str]:
+    res = [x for x in cleaned_words if x in s]
     return sorted(res, key=len, reverse=True)
 
 
-def similarity(a: str, b: str):
+def similarity(a: str, b: str) -> int:
     a, b = map(normalize, (a, b))
     return int(SequenceMatcher(None, a, b).ratio() * 100)
 
 
-def normalize(field_name: str):
+def normalize(field_name: str) -> str:
     expr = re.compile(r"[^A-Za-z0-9]+")
     digits_expr = re.compile(r"[0-9]")
     output_name = re.sub(expr, "", field_name)
@@ -31,7 +24,7 @@ def normalize(field_name: str):
     return output_name.lower()
 
 
-def similarity_ranking(word, corpus):
+def similarity_ranking(word, corpus) -> Dict[str, int]:
     match_dict = {
         potential_match: similarity(word, potential_match) for potential_match in corpus
     }
