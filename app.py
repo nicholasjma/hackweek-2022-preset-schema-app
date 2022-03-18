@@ -187,13 +187,15 @@ class SchemaApp(FlaskView):
 
     def handle_csv(self, df: pd.DataFrame) -> Response:
         self.state.pending_df = df
-        response = {"suggestions": {}}
+        response = {"suggestions": {}, "automaps": {}}
         for column in self.state.pending_df.columns:
             if (
                 column not in self.state.schema
-                and column not in self.state.alternative_lookup_map
             ):
-                response["suggestions"][column] = state.get_matches(column)
+                if column not in self.state.alternative_lookup_map:
+                    response["suggestions"][column] = state.get_matches(column)
+                else:
+                    response["automaps"][column] = self.state.alternative_lookup_map[column]
         self.save_state()
         return Responses.ok(response)
 
